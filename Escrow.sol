@@ -15,18 +15,21 @@ contract Escrow is Owned {
     uint public productQuantity;
     uint public productTotalAmount;
 	
+	/* Card info */
+    string public cardSeller;
+    string public cardBuyer;
+	
     uint public status;
 	string public deliveryAddress;
 	string public trackNum;
-    string public instructionPay;
 	
     /* Contract events */
-    event Created(address indexed sender);   // 1 - договор создан
-    event Signed(address indexed sender);    // 2 - покупатель подписал
-    event Payed(address indexed sender);     // 3 - товар оплачен
+    event Created(address indexed sender);     // 1 - договор создан
+    event Signed(address indexed sender);      // 2 - покупатель подписал
+    event Locked(address indexed sender);      // 3 - средства на карте покупателя заблокированы
     event Sent(address indexed sender, string trackNum); // 4 - товар отправлен
-    event Received(address indexed sender);  // 5 - товар получен
-    event Completed(address indexed sender); // 6 - договор выполнен
+    event Received(address indexed sender);    // 5 - товар получен
+    event Completed(address indexed sender);   // 6 - договор выполнен
 	
 	/* Modifiers functions */
     modifier onlySeller { if (msg.sender != seller) throw; _; }
@@ -55,40 +58,66 @@ contract Escrow is Owned {
      * @param _productQuantity is quantity
      */
     function setProduct(string _productName, uint _productPrice, uint _productQuantity) onlySeller {
-        if (status != 0) throw;
+		if (status != 0) throw;
 		productName = _productName;
 		productPrice = _productPrice;
 		productQuantity = _productQuantity;
 		productTotalAmount = productPrice * productQuantity;
-		status = 1;
-		Created(seller);
 	}
     
 	/**
-     * @dev Set instruction pay
-     * @param _instruction text description
+     * @dev Реквизиты для оплаты указывает продавец для осуществления платежа банком в случае исполнения контракта
+     * @param _cardSeller text description
      */
-    function setInstructionPay(string _instruction) onlyBank {
-		instructionPay = _instruction;
+    function setCardSeller(string _cardSeller) onlySeller {
+		if (status != 0) throw;
+		cardSeller = _cardSeller;
+	}
+    
+	/**
+     * @dev покупатель указывает детали кредитной карты, на которой банк заблокирует средства 
+     * @param _cardBuyer text description
+     */
+    function setCardBuyer(string _cardBuyer) onlyBuyer {
+		if (status != 1) throw;
+		cardBuyer = _cardBuyer;
+	}
+    
+	/**
+     * @dev покупатель указывает детали кредитной карты, на которой банк заблокирует средства 
+     * @param _deliveryAddress delivery address
+     */
+    function setDeliveryAddress(string _deliveryAddress) onlyBuyer {
+		if (status != 1) throw;
+		deliveryAddress = _deliveryAddress;
+	}
+	
+    /**
+     * @dev Signing of the contract by seller 
+     */
+    function signSeller() onlySeller {
+		if (status != 0) throw;
+		status = 1;
+		Created(seller);
 	}
 	
     /**
      * @dev Signing of the contract by buyer 
-     * @param _deliveryAddress delivery address
      */
-    function sign(string _deliveryAddress) onlyBuyer {
-		deliveryAddress = _deliveryAddress;
+    function signBuyer() onlyBuyer {
+		if (status != 1) throw;
 		status = 2;
 		Signed(buyer);
 	}
 	
     /**
+	 * @dev Банк подтверждает, что средства на карте покупателя заблокированы
      * @dev Confirmation of payment by bank
      */
-    function payment() onlyBank {
+    function lockedFunds() onlyBank {
         if (status != 2) throw;
 		status = 3;
-		Payed(bank);
+		Locked(bank);
 	}
     
 	/**
