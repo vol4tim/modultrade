@@ -23,19 +23,30 @@ contract Escrow is Owned {
 	string public deliveryAddress;
 	string public trackNum;
 	
+    /* Contract STATUSES */
+	uint constant STATUS_NULL      = 0; // не определен
+	uint constant STATUS_CREATED   = 1; // договор создан
+	uint constant STATUS_SIGNED    = 2; // покупатель подписал
+	uint constant STATUS_LOCKED    = 3; // средства на карте покупателя заблокированы
+	uint constant STATUS_SENT      = 4; // товар отправлен
+	uint constant STATUS_RECEIVED  = 5; // товар получен
+	uint constant STATUS_COMPLETED = 6; // договор выполнен
+	
     /* Contract events */
-    event Created(address indexed sender);     // 1 - договор создан
-    event Signed(address indexed sender);      // 2 - покупатель подписал
-    event Locked(address indexed sender);      // 3 - средства на карте покупателя заблокированы
-    event Sent(address indexed sender, string trackNum); // 4 - товар отправлен
-    event Received(address indexed sender);    // 5 - товар получен
-    event Completed(address indexed sender);   // 6 - договор выполнен
+    event Created(address indexed sender);
+    event Signed(address indexed sender);
+    event Locked(address indexed sender);
+    event Sent(address indexed sender, string trackNum);
+    event Received(address indexed sender);
+    event Completed(address indexed sender);
 	
 	/* Modifiers functions */
     modifier onlySeller { if (msg.sender != seller) throw; _; }
     modifier onlyBuyer { if (msg.sender != buyer) throw; _; }
     modifier onlyBank { if (msg.sender != bank) throw; _; }
     modifier onlyLogistics { if (msg.sender != logistics) throw; _; }
+	modifier onlyStatus(uint current) { if (status != current) throw; _; }
+	modifier fsmStatus(uint current, uint next) { if (status != current) throw; status = next; _; }
  
     /**
      * @dev contract constructor
@@ -57,8 +68,7 @@ contract Escrow is Owned {
      * @param _productPrice is price
      * @param _productQuantity is quantity
      */
-    function setProduct(string _productName, uint _productPrice, uint _productQuantity) onlySeller {
-		if (status != 0) throw;
+    function setProduct(string _productName, uint _productPrice, uint _productQuantity) onlySeller onlyStatus(STATUS_NULL) {
 		productName = _productName;
 		productPrice = _productPrice;
 		productQuantity = _productQuantity;
@@ -66,57 +76,48 @@ contract Escrow is Owned {
 	}
     
 	/**
-     * @dev Реквизиты для оплаты указывает продавец для осуществления платежа банком в случае исполнения контракта
+     * @dev Set details for payment by seller
      * @param _cardSeller text description
      */
-    function setCardSeller(string _cardSeller) onlySeller {
-		if (status != 0) throw;
+    function setCardSeller(string _cardSeller) onlySeller onlyStatus(STATUS_NULL) {
 		cardSeller = _cardSeller;
 	}
     
 	/**
-     * @dev покупатель указывает детали кредитной карты, на которой банк заблокирует средства 
+     * @dev Set details for locking funds
      * @param _cardBuyer text description
      */
-    function setCardBuyer(string _cardBuyer) onlyBuyer {
-		if (status != 1) throw;
+    function setCardBuyer(string _cardBuyer) onlyBuyer onlyStatus(STATUS_CREATED) {
 		cardBuyer = _cardBuyer;
 	}
     
 	/**
-     * @dev покупатель указывает детали кредитной карты, на которой банк заблокирует средства 
+     * @dev Buyer the delivery address
      * @param _deliveryAddress delivery address
      */
-    function setDeliveryAddress(string _deliveryAddress) onlyBuyer {
-		if (status != 1) throw;
+    function setDeliveryAddress(string _deliveryAddress) onlyBuyer onlyStatus(STATUS_CREATED) {
 		deliveryAddress = _deliveryAddress;
 	}
 	
     /**
      * @dev Signing of the contract by seller 
      */
-    function signSeller() onlySeller {
-		if (status != 0) throw;
-		status = 1;
+    function signSeller() onlySeller fsmStatus(STATUS_NULL, STATUS_CREATED) {
 		Created(seller);
 	}
 	
     /**
      * @dev Signing of the contract by buyer 
      */
-    function signBuyer() onlyBuyer {
-		if (status != 1) throw;
-		status = 2;
+    function signBuyer() onlyBuyer fsmStatus(STATUS_CREATED, STATUS_SIGNED) {
 		Signed(buyer);
 	}
 	
     /**
-	 * @dev Банк подтверждает, что средства на карте покупателя заблокированы
+	 * @dev Bank confirms that funds in card blocked
      * @dev Confirmation of payment by bank
      */
-    function lockedFunds() onlyBank {
-        if (status != 2) throw;
-		status = 3;
+    function lockedFunds() onlyBank fsmStatus(STATUS_SIGNED, STATUS_LOCKED) {
 		Locked(bank);
 	}
     
@@ -124,28 +125,22 @@ contract Escrow is Owned {
      * @dev Set track number
      * @param _trackNum track number
      */
-    function setTrackNum(string _trackNum) onlySeller {
-        if (status != 3) throw;
+    function setTrackNum(string _trackNum) onlySeller fsmStatus(STATUS_LOCKED, STATUS_SENT) {
 		trackNum = _trackNum;
-		status = 4;
 		Sent(seller, trackNum);
 	}
     
 	/**
      * @dev Confirmation of receipt of parcels
      */
-    function received() onlyLogistics {
-        if (status != 4) throw;
-		status = 5;
+    function received() onlyLogistics fsmStatus(STATUS_SENT, STATUS_RECEIVED) {
 		Received(logistics);
 	}
 	
     /**
      * @dev Contract is completed
      */
-    function complete() onlyBank {
-        if (status != 5) throw;
-		status = 6;
+    function complete() onlyBank fsmStatus(STATUS_RECEIVED, STATUS_COMPLETED) {
 		Completed(bank);
 	}
 }
