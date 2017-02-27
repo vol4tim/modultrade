@@ -71,7 +71,8 @@ contract BuilderEscrow is Builder {
         getContractsOf[_client].push(inst);
 		addContract(inst);
         Builded(_client, inst);
-        inst.delegate(_client);
+        inst.setOwner(_client);
+        inst.setHammer(_client);
         return inst;
     }
 }

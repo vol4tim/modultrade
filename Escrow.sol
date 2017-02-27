@@ -1,7 +1,7 @@
 pragma solidity ^0.4.4;
-import 'common/Owned.sol';
+import 'common/Object.sol';
 
-contract Escrow is Owned {
+contract Escrow is Object {
 	
 	/* Parties to a contract */
     address public seller;
